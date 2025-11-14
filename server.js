@@ -286,6 +286,46 @@ app.post('/api/artworks/:id/comments', authenticateToken, async (req, res) => {
   }
 });
 
+// DELETE an artwork
+app.delete('/api/artworks/:id', authenticateToken, async (req, res) => {
+  try {
+    const artworkId = parseInt(req.params.id);
+    const userId = req.user.id;
+    
+    // Check if artwork exists and belongs to user
+    const artwork = await prisma.artwork.findUnique({
+      where: { id: artworkId }
+    });
+    
+    if (!artwork) {
+      return res.status(404).json({ error: 'Artwork not found' });
+    }
+    
+    if (artwork.userId !== userId) {
+      return res.status(403).json({ error: 'You can only delete your own artworks' });
+    }
+    
+    // Delete associated likes and comments first
+    await prisma.like.deleteMany({
+      where: { artworkId: artworkId }
+    });
+    
+    await prisma.comment.deleteMany({
+      where: { artworkId: artworkId }
+    });
+    
+    // Delete the artwork
+    await prisma.artwork.delete({
+      where: { id: artworkId }
+    });
+    
+    res.json({ message: 'Artwork deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting artwork:', error);
+    res.status(500).json({ error: 'Failed to delete artwork' });
+  }
+});
+
 // ========== COMMUNITY POSTS ROUTES ==========
 
 // Create Community Post
@@ -329,6 +369,37 @@ app.get('/api/posts', async (req, res) => {
     res.json(posts);
   } catch (error) {
     res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+// DELETE a post
+app.delete('/api/posts/:id', authenticateToken, async (req, res) => {
+  try {
+    const postId = parseInt(req.params.id);
+    const userId = req.user.id;
+    
+    // Check if post exists and belongs to user
+    const post = await prisma.post.findUnique({
+      where: { id: postId }
+    });
+    
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+    
+    if (post.userId !== userId) {
+      return res.status(403).json({ error: 'You can only delete your own posts' });
+    }
+    
+    // Delete the post
+    await prisma.post.delete({
+      where: { id: postId }
+    });
+    
+    res.json({ message: 'Post deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting post:', error);
+    res.status(500).json({ error: 'Failed to delete post' });
   }
 });
 
