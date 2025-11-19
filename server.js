@@ -290,7 +290,7 @@ app.post('/api/artworks/:id/comments', authenticateToken, async (req, res) => {
 app.delete('/api/artworks/:id', authenticateToken, async (req, res) => {
   try {
     const artworkId = parseInt(req.params.id);
-    const userId = req.user.id;
+    const userId = req.userId;
     
     // Check if artwork exists and belongs to user
     const artwork = await prisma.artwork.findUnique({
@@ -376,7 +376,7 @@ app.get('/api/posts', async (req, res) => {
 app.delete('/api/posts/:id', authenticateToken, async (req, res) => {
   try {
     const postId = parseInt(req.params.id);
-    const userId = req.user.id;
+    const userId = req.userId;
     
     // Check if post exists and belongs to user
     const post = await prisma.post.findUnique({
@@ -462,4 +462,190 @@ app.post('/api/progress', authenticateToken, async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+});
+
+// ========== SESSION ROUTES ==========
+
+// Create a session
+app.post('/api/sessions', authenticateToken, async (req, res) => {
+  try {
+    const { title, date, time, maxAttendees } = req.body;
+    const userId = req.user.id;
+    
+    const session = await prisma.session.create({
+      data: {
+        title,
+        date: new Date(date),
+        time,
+        maxAttendees: parseInt(maxAttendees),
+        userId,
+        attendees: {
+          create: [{ userId }] // Creator automatically joins
+        }
+      },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        attendees: {
+          include: {
+            user: { select: { id: true, name: true } }
+          }
+        }
+      }
+    });
+    
+    res.json(session);
+  } catch (error) {
+    console.error('Error creating session:', error);
+    res.status(500).json({ error: 'Failed to create session' });
+  }
+});
+
+// Get all sessions
+app.get('/api/sessions', async (req, res) => {
+  try {
+    const sessions = await prisma.session.findMany({
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        attendees: {
+          include: {
+            user: { select: { id: true, name: true } }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    
+    res.json(sessions);
+  } catch (error) {
+    console.error('Error fetching sessions:', error);
+    res.status(500).json({ error: 'Failed to fetch sessions' });
+  }
+});
+
+// Join a session
+app.post('/api/sessions/:id/join', authenticateToken, async (req, res) => {
+  try {
+    const sessionId = parseInt(req.params.id);
+    const userId = req.user.id;
+    
+    // Check if session exists
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      include: { attendees: true }
+    });
+    
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    // Check if already joined
+    const alreadyJoined = session.attendees.some(a => a.userId === userId);
+    if (alreadyJoined) {
+      return res.status(400).json({ error: 'Already joined this session' });
+    }
+    
+    // Check if session is full
+    if (session.attendees.length >= session.maxAttendees) {
+      return res.status(400).json({ error: 'Session is full' });
+    }
+    
+    // Join session
+    await prisma.sessionAttendee.create({
+      data: { sessionId, userId }
+    });
+    
+    // Return updated session
+    const updatedSession = await prisma.session.findUnique({
+      where: { id: sessionId },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        attendees: {
+          include: {
+            user: { select: { id: true, name: true } }
+          }
+        }
+      }
+    });
+    
+    res.json(updatedSession);
+  } catch (error) {
+    console.error('Error joining session:', error);
+    res.status(500).json({ error: 'Failed to join session' });
+  }
+});
+
+// Leave a session
+app.post('/api/sessions/:id/leave', authenticateToken, async (req, res) => {
+  try {
+    const sessionId = parseInt(req.params.id);
+    const userId = req.user.id;
+    
+    // Check if user is the creator
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId }
+    });
+    
+    if (session.userId === userId) {
+      return res.status(400).json({ error: 'Cannot leave a session you created' });
+    }
+    
+    // Leave session
+    await prisma.sessionAttendee.deleteMany({
+      where: { sessionId, userId }
+    });
+    
+    // Return updated session
+    const updatedSession = await prisma.session.findUnique({
+      where: { id: sessionId },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        attendees: {
+          include: {
+            user: { select: { id: true, name: true } }
+          }
+        }
+      }
+    });
+    
+    res.json(updatedSession);
+  } catch (error) {
+    console.error('Error leaving session:', error);
+    res.status(500).json({ error: 'Failed to leave session' });
+  }
+});
+
+// Delete a session
+app.delete('/api/sessions/:id', authenticateToken, async (req, res) => {
+  try {
+    const sessionId = parseInt(req.params.id);
+    const userId = req.user.id;
+    
+    // Check if user is the creator
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId }
+    });
+    
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    if (session.userId !== userId) {
+      return res.status(403).json({ error: 'You can only delete your own sessions' });
+    }
+    
+    // Delete attendees first
+    await prisma.sessionAttendee.deleteMany({
+      where: { sessionId }
+    });
+    
+    // Delete session
+    await prisma.session.delete({
+      where: { id: sessionId }
+    });
+    
+    res.json({ message: 'Session deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting session:', error);
+    res.status(500).json({ error: 'Failed to delete session' });
+  }
 });
