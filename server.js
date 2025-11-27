@@ -11,7 +11,18 @@ const app = express();
 const prisma = new PrismaClient();
 
 // Middleware
-app.use(cors());
+// Find your CORS middleware and replace it with:
+app.use(cors({
+  origin: [
+    'http://localhost:5500',
+    'http://127.0.0.1:5500',
+    'https://yourusername.github.io', // Replace with YOUR GitHub username
+    'http://yourusername.github.io'   // HTTP version too
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
 // Cloudinary config (add your credentials)
