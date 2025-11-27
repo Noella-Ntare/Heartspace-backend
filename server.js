@@ -468,9 +468,15 @@ app.listen(PORT, () => {
 
 // Create a session
 app.post('/api/sessions', authenticateToken, async (req, res) => {
+  console.log("=== CREATE SESSION ENDPOINT HIT ===");
+  console.log("Request body:", req.body);
+  console.log("User ID from token:", req.userId);
+  
   try {
     const { title, date, time, maxAttendees } = req.body;
-    const userId = req.user.id;
+    const userId = req.userId;
+    
+    console.log("Creating session with:", { title, date, time, maxAttendees, userId });
     
     const session = await prisma.session.create({
       data: {
@@ -480,7 +486,7 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
         maxAttendees: parseInt(maxAttendees),
         userId,
         attendees: {
-          create: [{ userId }] // Creator automatically joins
+          create: [{ userId }]
         }
       },
       include: {
@@ -493,10 +499,11 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
       }
     });
     
+    console.log("✅ Session created successfully:", session);
     res.json(session);
   } catch (error) {
-    console.error('Error creating session:', error);
-    res.status(500).json({ error: 'Failed to create session' });
+    console.error("❌ Error creating session:", error);
+    res.status(500).json({ error: 'Failed to create session: ' + error.message });
   }
 });
 
@@ -526,7 +533,7 @@ app.get('/api/sessions', async (req, res) => {
 app.post('/api/sessions/:id/join', authenticateToken, async (req, res) => {
   try {
     const sessionId = parseInt(req.params.id);
-    const userId = req.user.id;
+    const userId = req.userId;
     
     // Check if session exists
     const session = await prisma.session.findUnique({
@@ -578,7 +585,7 @@ app.post('/api/sessions/:id/join', authenticateToken, async (req, res) => {
 app.post('/api/sessions/:id/leave', authenticateToken, async (req, res) => {
   try {
     const sessionId = parseInt(req.params.id);
-    const userId = req.user.id;
+    const userId = req.userId;
     
     // Check if user is the creator
     const session = await prisma.session.findUnique({
@@ -618,7 +625,7 @@ app.post('/api/sessions/:id/leave', authenticateToken, async (req, res) => {
 app.delete('/api/sessions/:id', authenticateToken, async (req, res) => {
   try {
     const sessionId = parseInt(req.params.id);
-    const userId = req.user.id;
+    const userId = req.userId;
     
     // Check if user is the creator
     const session = await prisma.session.findUnique({
