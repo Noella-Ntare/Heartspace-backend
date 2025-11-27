@@ -58,6 +58,23 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+// Health check 
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'HeArtSpace API is running',
+    status: 'healthy',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/api', (req, res) => {
+  res.json({ 
+    message: 'HeArtSpace API',
+    version: '1.0.0'
+  });
+});
+
+
 // ========== AUTH ROUTES ==========
 
 // Sign Up
@@ -488,12 +505,6 @@ app.post('/api/progress', authenticateToken, async (req, res) => {
   }
 });
 
-// Start server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
-
 // ========== SESSION ROUTES ==========
 
 // Create a session
@@ -686,3 +697,14 @@ app.delete('/api/sessions/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to delete session' });
   }
 });
+
+// Export for Vercel
+module.exports = app;
+
+// Only start server locally (not on Vercel)
+if (process.env.NODE_ENV !== 'production') {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
