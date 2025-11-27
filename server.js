@@ -16,8 +16,7 @@ app.use(cors({
   origin: [
     'http://localhost:5500',
     'http://127.0.0.1:5500',
-    'https://yourusername.github.io', // Replace with YOUR GitHub username
-    'http://yourusername.github.io'   // HTTP version too
+    'https://heartspace-eight.vercel.app',
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -32,8 +31,13 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// Multer for file uploads
-const upload = multer({ dest: 'uploads/' });
+const storage = multer.memoryStorage(); 
+const upload = multer({ 
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 
+  }
+});
 
 // JWT Secret (use environment variable in production)
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this';
@@ -141,17 +145,30 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 // ========== ARTWORK ROUTES ==========
 
 // Upload Artwork
+// Upload Artwork
 app.post('/api/artworks', authenticateToken, upload.single('image'), async (req, res) => {
   try {
-    const { title, description } = req.body;
+    const { title, description, category } = req.body;
 
     if (!req.file) {
       return res.status(400).json({ error: 'Image is required' });
     }
 
-    // Upload to Cloudinary
-    const result = await cloudinary.uploader.upload(req.file.path, {
-      folder: 'heartspace'
+    // Upload to Cloudinary from buffer (not from file path)
+    const result = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'heartspace',
+          resource_type: 'auto'
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+      
+      // Write the buffer to the stream
+      uploadStream.end(req.file.buffer);
     });
 
     // Create artwork in database
@@ -159,6 +176,7 @@ app.post('/api/artworks', authenticateToken, upload.single('image'), async (req,
       data: {
         title,
         description,
+        category: category || 'Other',
         imageUrl: result.secure_url,
         userId: req.userId
       },
@@ -171,6 +189,7 @@ app.post('/api/artworks', authenticateToken, upload.single('image'), async (req,
 
     res.status(201).json(artwork);
   } catch (error) {
+    console.error('Error uploading artwork:', error);
     res.status(500).json({ error: 'Server error: ' + error.message });
   }
 });
