@@ -1,4 +1,4 @@
-📄 HeArtSpace — Backend Documentation (Report-Style README)
+📄 HeArtSpace — Backend Documentation
 1. Introduction
 
 The backend component of HeArtSpace provides secure APIs that enable content delivery, user management, emotional healing modules, and digital community engagement.
